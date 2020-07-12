@@ -1,30 +1,16 @@
 package contacts;
 
+import java.time.LocalDateTime;
+
 public class Contact {
-    private String firstName;
-    private String lastName;
+
     private String phoneNumber = "";
+    private final boolean isPerson;
+    private final LocalDateTime created = LocalDateTime.now();
+    private LocalDateTime lastEdited = LocalDateTime.now();
 
-    public Contact(String firstName, String lastName, String phoneNumber) {
-        this.firstName = firstName;
-        this.lastName = lastName;
-        setPhoneNumber(phoneNumber);
-    }
-
-    public String getFirstName() {
-        return firstName;
-    }
-
-    public void setFirstName(String firstName) {
-        this.firstName = firstName;
-    }
-
-    public String getLastName() {
-        return lastName;
-    }
-
-    public void setLastName(String lastName) {
-        this.lastName = lastName;
+    public Contact(boolean isThisContactAPerson) {
+        this.isPerson = isThisContactAPerson;
     }
 
     public String getPhoneNumber() {
@@ -84,8 +70,19 @@ public class Contact {
         return phoneNumber;
     }
 
-    @Override
-    public String toString() {
-        return String.format("%s %s, %s", getFirstName(), getLastName(), getPhoneNumber());
+    public boolean isPerson() {
+        return isPerson;
+    }
+
+    public LocalDateTime getCreated() {
+        return created;
+    }
+
+    public LocalDateTime getLastEdited() {
+        return lastEdited;
+    }
+
+    public void setLastEdited(LocalDateTime lastEdited) {
+        this.lastEdited = lastEdited;
     }
 }
