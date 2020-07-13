@@ -1,17 +1,15 @@
 package contacts;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.util.List;
 
-public class Contact {
+public abstract class Contact implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     private String phoneNumber = "";
-    private final boolean isPerson;
     private final LocalDateTime created = LocalDateTime.now();
     private LocalDateTime lastEdited = LocalDateTime.now();
-
-    public Contact(boolean isThisContactAPerson) {
-        this.isPerson = isThisContactAPerson;
-    }
 
     public String getPhoneNumber() {
         return hasNumber() ? phoneNumber : "[no number]";
@@ -70,10 +68,6 @@ public class Contact {
         return phoneNumber;
     }
 
-    public boolean isPerson() {
-        return isPerson;
-    }
-
     public LocalDateTime getCreated() {
         return created;
     }
@@ -85,4 +79,14 @@ public class Contact {
     public void setLastEdited(LocalDateTime lastEdited) {
         this.lastEdited = lastEdited;
     }
+
+    public abstract List<String> getAllData();
+
+    public abstract String getDisplayName();
+
+    public abstract List<String> getEditableFields();
+
+    public abstract void editField(String field);
+
+    public abstract String getSearchString();
 }

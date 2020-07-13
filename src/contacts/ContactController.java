@@ -1,243 +1,246 @@
 package contacts;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 public class ContactController {
-    private final List<Contact> phoneBook = new ArrayList<>();
-    private final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'mm:ss");
+    private static final int BACK_TO_MENU_VALUE = -1;
 
-    void run() {
+    private List<Contact> phoneBook;
+
+    void run(String[] args) {
+        String fileName = parseArgs(args);
+        phoneBook = loadFromDisk(fileName);
         boolean thereIsMoreToDo = true;
 
         do {
-            String action = Prompter.nextString("Enter action (add, remove, edit, count, info, exit): ");
+            String action = Prompter.nextString("[menu] Enter action (add, list, search, count, exit): ");
 
             switch (action) {
                 case "add":
                     addAContact();
                     break;
-                case "remove":
-                    removeAContact();
+                case "list":
+                    listContacts();
                     break;
-                case "edit":
-                    editAContact();
+                case "search":
+                    search();
                     break;
                 case "count":
                     countPhoneBook();
-                    break;
-                case "info":
-                    displayInfo();
                     break;
                 case "exit":
                     thereIsMoreToDo = false;
                     break;
                 default:
                     System.out.println("Invalid action");
+                    System.out.println();
             }
         } while(thereIsMoreToDo);
+
+        saveToDisk(phoneBook, fileName);
+    }
+
+    private List<Contact> loadFromDisk(String fileName) {
+        if (!fileName.isEmpty()) {
+            Object obj = PhoneBookDAO.deserialize(fileName);
+            System.out.println("open " + fileName);
+            System.out.println();
+
+            if (obj instanceof List) {
+                //noinspection unchecked
+                return (List<Contact>) obj;
+            }
+        }
+
+        return new ArrayList<>();
+    }
+
+    private void saveToDisk(List<Contact> phoneBook, String fileName) {
+        if (!fileName.isEmpty()) {
+            PhoneBookDAO.serialize(phoneBook, fileName);
+        }
+    }
+
+    private String parseArgs(String[] args) {
+        String fileName = "";
+
+        if (args.length > 0) {
+            fileName = args[0];
+        }
+
+        return fileName;
     }
 
     private void addAContact() {
         String type = Prompter.nextString("Enter the type (person, organization): ");
+        Contact contact;
 
         if ("person".equals(type)) {
-            addAPerson();
+            contact = new PersonContact();
         } else if ("organization".equals(type)) {
-            addAnOrganization();
+            contact = new OrganizationContact();
         } else {
             System.out.println("Bad type");
-            System.out.println();
-        }
-    }
-
-    private void addAPerson() {
-        PersonContact contact = new PersonContact(true);
-        String firstName = Prompter.nextString("Enter the name: ");
-        contact.setFirstName(firstName);
-        String lastName = Prompter.nextString("Enter the surname: ");
-        contact.setLastName(lastName);
-        LocalDate birthday = Prompter.nextDate("Enter the birth date: ");
-        contact.setBirthday(birthday);
-        Gender gender = Prompter.nextGender("Enter the gender (M, F): ");
-        contact.setGender(gender);
-        String phoneNumber = Prompter.nextString("Enter the number: ");
-        contact.setPhoneNumber(phoneNumber);
-        phoneBook.add(contact);
-        System.out.println("The record added.");
-        System.out.println();
-    }
-
-    private void addAnOrganization() {
-        OrganizationContact contact = new OrganizationContact(false);
-        String name = Prompter.nextString("Enter the organization name: ");
-        contact.setOrganizationName(name);
-        String address = Prompter.nextString("Enter the address: ");
-        contact.setAddress(address);
-        String phoneNumber = Prompter.nextString("Enter the number: ");
-        contact.setPhoneNumber(phoneNumber);
-        phoneBook.add(contact);
-        System.out.println("The record added.");
-        System.out.println();
-    }
-
-    private void removeAContact() {
-        if (phoneBook.isEmpty()) {
-            System.out.println("No records to remove!");
             System.out.println();
             return;
         }
 
+        editAllFields(contact);
+    }
+
+    private void listContacts() {
         listPhoneBook();
-        int index = Prompter.nextInt("Select a record: ");
+        int index = listMenu();
+
+        if (index != BACK_TO_MENU_VALUE) {
+            recordMenu(index);
+        }
+    }
+
+    private void search() {
+        boolean searchAgain;
+
+        do {
+            String queryIn = Prompter.nextString("Enter search query: ");
+            Pattern queryPattern = Pattern.compile(queryIn, Pattern.CASE_INSENSITIVE);
+            List<SearchRecord> queryList = new ArrayList<>();
+
+            for (int i = 0; i < phoneBook.size(); i++) {
+                Contact contact = phoneBook.get(i);
+
+                if (queryPattern.matcher(contact.getSearchString()).find()) {
+                    queryList.add(new SearchRecord(contact, i));
+                }
+            }
+
+            System.out.printf("Found %d results:%n", queryList.size());
+            printSearchRecords(queryList);
+            searchAgain = searchMenu(queryList);
+        } while (searchAgain);
+    }
+
+    private void printSearchRecords(List<SearchRecord> records) {
+        for (int i = 0; i < records.size(); i++) {
+            Contact contact = records.get(i).getContact();
+            System.out.printf("%d. %s%n", i + 1, contact.getDisplayName());
+        }
+
+        System.out.println();
+    }
+
+    private boolean searchMenu(List<SearchRecord> queryList) {
+        boolean searchAgain = false;
+        String action = Prompter.nextString("[search] Enter action ([number], back, again): ");
+
+        if (action.matches("\\d+")) {
+            int queryIndex = Integer.parseInt(action);
+            SearchRecord record = queryList.get(queryIndex - 1);
+            int contactIndex = record.getIndex() + 1;
+            displayThisContact(contactIndex);
+            recordMenu(contactIndex);
+         } else if ("again".equals(action)) {
+            searchAgain = true;
+        } else if ("back".equals(action)) {
+            System.out.println();
+        } else {
+            System.out.println("Invalid action");
+            System.out.println();
+        }
+
+        return searchAgain;
+    }
+
+    private void editAllFields(Contact contact) {
+        for (String field : contact.getEditableFields()) {
+            contact.editField(field);
+        }
+
+        phoneBook.add(contact);
+        System.out.println("The record added.");
+        System.out.println();
+    }
+
+    private void removeAContact(int index) {
         phoneBook.remove(index - 1);
         System.out.println("The record removed!");
         System.out.println();
     }
 
-    private void editAContact() {
-        if (phoneBook.isEmpty()) {
-            System.out.println("No records to edit!");
-            System.out.println();
-            return;
-        }
-
-        listPhoneBook();
-        int index = Prompter.nextInt("Select a record: ");
+    private void editAContact(int index) {
         Contact contact = phoneBook.get(index - 1);
-
-        if (contact.isPerson()) {
-            PersonContact personContact = (PersonContact) contact;
-            editAPersonContact(personContact, index);
-        } else {
-            OrganizationContact organizationContact = (OrganizationContact) contact;
-            editAnOrganization(organizationContact, index);
-        }
-    }
-
-    private void editAPersonContact(PersonContact personContact, int index) {
-        String field = Prompter.nextString("Select a field (name, surname, birth, gender, number): ");
-
-        switch (field) {
-            case "name":
-                String firstName = Prompter.nextString("Enter name: ");
-                personContact.setFirstName(firstName);
-                break;
-            case "surname":
-                String lastName = Prompter.nextString("Enter surname: ");
-                personContact.setLastName(lastName);
-                break;
-            case "birth":
-                LocalDate birthday = Prompter.nextDate("Enter the birth date: ");
-                personContact.setBirthday(birthday);
-                break;
-            case "gender":
-                Gender gender = Prompter.nextGender("Enter the gender: ");
-                personContact.setGender(gender);
-                break;
-            case "number":
-                String phoneNumber = Prompter.nextString("Enter number: ");
-                personContact.setPhoneNumber(phoneNumber);
-                break;
-            default:
-                System.out.println("Invalid field");
-                System.out.println();
-                return;
-        }
-
-        personContact.setLastEdited(LocalDateTime.now());
+        String fieldsPrompt = String.join(", ", contact.getEditableFields());
+        String field = Prompter.nextString("Select a field (" + fieldsPrompt + "): ");
+        contact.editField(field);
+        contact.setLastEdited(LocalDateTime.now());
         phoneBook.remove(index - 1);
-        phoneBook.add(index - 1, personContact);
-        System.out.println("The record updated!");
-        System.out.println();
-    }
-
-    private void editAnOrganization(OrganizationContact organizationContact, int index) {
-        String field = Prompter.nextString("Select a field (name, address, number): ");
-
-        switch (field) {
-            case "name":
-                String name = Prompter.nextString("Enter organization name: ");
-                organizationContact.setOrganizationName(name);
-                break;
-            case "address":
-                String address = Prompter.nextString("Enter address: ");
-                organizationContact.setAddress(address);
-                break;
-            case "number":
-                String phoneNumber = Prompter.nextString("Enter number: ");
-                organizationContact.setPhoneNumber(phoneNumber);
-                break;
-            default:
-                System.out.println("Invalid field");
-                return;
-        }
-
-        organizationContact.setLastEdited(LocalDateTime.now());
-        phoneBook.remove(index - 1);
-        phoneBook.add(index - 1, organizationContact);
-        System.out.println("The record updated!");
-        System.out.println();
+        phoneBook.add(index - 1, contact);
+        System.out.println("Saved");
+        displayThisContact(index);
     }
 
     private void countPhoneBook() {
         System.out.printf("The Phone Book has %d records.%n%n", phoneBook.size());
     }
 
-    private void displayInfo() {
-        listPhoneBook();
-        int index = Prompter.nextInt("Enter index to show info: ");
-        Contact contact = phoneBook.get(index - 1);
-
-        if (contact.isPerson()) {
-            PersonContact personContact = (PersonContact) contact;
-            displayPerson(personContact);
-        } else {
-            OrganizationContact organizationContact = (OrganizationContact) contact;
-            displayOrganization(organizationContact);
+    private void displayThisContact(int index) {
+        if (index > 0 && index <= phoneBook.size()) {
+            Contact contact = phoneBook.get(index - 1);
+            contact.getAllData().forEach(System.out::println);
         }
-    }
 
-    private void displayPerson(PersonContact personContact) {
-        System.out.println("Name: " + personContact.getFirstName());
-        System.out.println("Surname: " + personContact.getLastName());
-        String displayBirthday = personContact.getBirthday() == null
-                ? "[no data]"
-                : personContact.getBirthday().toString();
-        System.out.println("Birth date: " + displayBirthday);
-        String displayGender = personContact.getGender() == null
-                ? "[no data]"
-                : personContact.getGender().toString();
-        System.out.println("Gender: " + displayGender);
-        System.out.println("Number: " + personContact.getPhoneNumber());
-        System.out.println("Time created: " + personContact.getCreated().format(formatter));
-        System.out.println("Time last edit: " + personContact.getLastEdited().format(formatter));
-        System.out.println();
-    }
-
-    private void displayOrganization(OrganizationContact organizationContact) {
-        System.out.println("Organization name: " + organizationContact.getOrganizationName());
-        System.out.println("Address: " + organizationContact.getAddress());
-        System.out.println("Number: " + organizationContact.getPhoneNumber());
-        System.out.println("Time created: " + organizationContact.getCreated().format(formatter));
-        System.out.println("Time last edit: " + organizationContact.getLastEdited().format(formatter));
         System.out.println();
     }
 
     private void listPhoneBook() {
         for (int i = 0; i < phoneBook.size(); i++) {
             Contact contact = phoneBook.get(i);
-
-            if (contact.isPerson()) {
-                PersonContact personContact = (PersonContact) contact;
-                System.out.printf("%d. %s %s%n", i + 1, personContact.getFirstName(), personContact.getLastName());
-            } else {
-                OrganizationContact organizationContact = (OrganizationContact) contact;
-                System.out.printf("%d. %s%n", i + 1, organizationContact.getOrganizationName());
-            }
+            System.out.printf("%d. %s%n", i + 1, contact.getDisplayName());
         }
+
+        System.out.println();
+    }
+
+    private void recordMenu(int index) {
+        boolean moreToDo = true;
+
+        do {
+            String action = Prompter.nextString("[record] Enter action (edit, delete, menu): ");
+
+            switch(action) {
+                case "edit":
+                    editAContact(index);
+                    break;
+                case "delete":
+                    removeAContact(index);
+                    break;
+                case "menu":
+                    moreToDo = false;
+                    break;
+                default:
+                    System.out.println("Invalid action");
+            }
+        } while (moreToDo);
+
+        System.out.println();
+    }
+
+    private int listMenu() {
+        int index = BACK_TO_MENU_VALUE;
+        String action = Prompter.nextString("[list] Enter action ([number], back): ");
+
+        if (action.matches("\\d+")) {
+            index = Integer.parseInt(action);
+            displayThisContact(index);
+        } else if ("back".equals(action)) {
+            System.out.println();
+        } else {
+            System.out.println("Invalid action");
+            System.out.println();
+        }
+
+        return index;
     }
 }
